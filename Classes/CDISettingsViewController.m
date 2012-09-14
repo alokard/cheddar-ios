@@ -9,6 +9,7 @@
 #import "CDISettingsViewController.h"
 #import "CDIUpgradeViewController.h"
 #import "CDISettingsTableViewCell.h"
+#import "CDIHUDView.h"
 #import "TTTAttributedLabel.h"
 #import "UIColor+CheddariOSAdditions.h"
 #import "UIButton+CheddariOSAdditions.h"
@@ -32,6 +33,13 @@
 }
 
 
+#pragma mark - NSObject
+
+- (void)dealloc {
+	[[NSNotificationCenter defaultCenter] removeObserver:self];
+}
+
+
 #pragma mark - UIViewController
 
 - (void)viewDidLoad {
@@ -44,7 +52,7 @@
 	footer.autoresizingMask = UIViewAutoresizingFlexibleWidth;
 	footer.textAlignment = UITextAlignmentCenter;
 	footer.textColor = [UIColor cheddarLightTextColor];
-	footer.font = [UIFont cheddarFontOfSize:14.0f];
+	footer.font = [UIFont cheddarInterfaceFontOfSize:14.0f];
 	footer.text = [NSString stringWithFormat:@"Version %@", [[[NSBundle mainBundle] infoDictionary] objectForKey:@"CFBundleShortVersionString"]];
 	footer.shadowColor = [UIColor whiteColor];
 	footer.shadowOffset = CGSizeMake(0.0f, 1.0f);
@@ -86,6 +94,12 @@
 
 	[[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(_updateUI) name:kCDKPlusDidChangeNotificationName object:nil];
 	[self _updateUI];
+}
+
+
+- (void)viewWillAppear:(BOOL)animated {
+	[super viewWillAppear:animated];
+	[self.tableView reloadData];
 }
 
 
@@ -162,7 +176,7 @@
 	[controller dismissModalViewControllerAnimated:YES];
 
 	if (result == MFMailComposeResultSent) {
-		SSHUDView *hud = [[SSHUDView alloc] init];
+		CDIHUDView *hud = [[CDIHUDView alloc] init];
 		[hud completeQuicklyWithTitle:@"Sent!"];
 	}
 }
@@ -222,11 +236,20 @@
 
 
 - (UITableViewCell *)tableView:(UITableView *)tableView cellForRowAtIndexPath:(NSIndexPath *)indexPath {
-	static NSString *cellIdentifier = @"cellIdentifier";
+	NSString *cellIdentifier = @"None";
+	NSUInteger numberOfRows = [tableView numberOfRowsInSection:indexPath.section];
+	if (numberOfRows == 1) {
+		cellIdentifier = @"Both";
+	} else if (indexPath.row == 0) {
+		cellIdentifier = @"Top";
+	} else if (indexPath.row == numberOfRows - 1) {
+		cellIdentifier = @"Bottom";
+	}
 	
 	UITableViewCell *cell = [tableView dequeueReusableCellWithIdentifier:cellIdentifier];
 	if (!cell) {
 		cell = [[CDISettingsTableViewCell alloc] initWithStyle:UITableViewCellStyleValue1 reuseIdentifier:cellIdentifier];
+		cell.accessoryType = UITableViewCellAccessoryDisclosureIndicator;
 	}
 	
 	// Display
@@ -236,7 +259,7 @@
 			cell.detailTextLabel.text = @"Large";
 		} else if (indexPath.row == 1) {
 			cell.textLabel.text = @"Font";
-			cell.detailTextLabel.text = @"Gotham";
+			cell.detailTextLabel.text = [CDISettingsFontPickerViewController textForSelectedKey];
 		}
 	}
 	
@@ -244,7 +267,7 @@
 	if (indexPath.section == 1) {
 		if (indexPath.row == 0) {
 			cell.textLabel.text = @"Tap Action";
-			cell.detailTextLabel.text = @"Complete";
+			cell.detailTextLabel.text = [CDISettingsTapPickerViewController textForSelectedKey];
 		}
 	}
 	
@@ -303,19 +326,25 @@
 	}
 	
 	// Other
-//	if (indexPath.section == 2) {
-//		if (indexPath.row == 0) {
-//			cell.textLabel.text = @"About";
-//			cell.detailTextLabel.text = nil;
-//		} else if (indexPath.row == 1) {
-//			cell.textLabel.text = @"Support";
-//			cell.detailTextLabel.text = nil;
-//		} else if (indexPath.row == 2) {
-//			cell.textLabel.text = @"Sign Out";
-//			cell.detailTextLabel.text = nil;
-//		}
-//	}
-	
+	if (indexPath.section == 2) {
+		// About
+		if (indexPath.row == 0) {
+			// TODO: Show about
+		}
+
+		// Support
+		else if (indexPath.row == 1) {
+			[self support:nil];
+			return;
+		}
+
+		// Sign out
+		else if (indexPath.row == 2) {
+			[self signOut:nil];
+			return;
+		}
+	}
+
 	if (viewController) {
 		[self.navigationController pushViewController:viewController animated:YES];
 	}
