@@ -8,14 +8,15 @@
 
 #import "CDIListsViewController.h"
 #import "CDIListTableViewCell.h"
-#import "CDIListViewController.h"
+#import "CDITasksViewController.h"
 #import "CDICreateListViewController.h"
 #import "CDISettingsViewController.h"
 #import "CDISplitViewController.h"
 #import "UIColor+CheddariOSAdditions.h"
 #import "CDIUpgradeViewController.h"
-#import "CDINoListsView.h"
+#import "CDIListsPlaceholderView.h"
 #import "CDIAddListTableViewCell.h"
+#import "CDIHUDView.h"
 #import "SMTEDelegateController.h"
 #import <SSToolkit/UIScrollView+SSToolkitAdditions.h>
 
@@ -62,20 +63,21 @@ NSString *const kCDISelectedListKey = @"CDISelectedListKey";
 
 - (void)viewDidLoad {
 	[super viewDidLoad];
-	UIImageView *title = [[UIImageView alloc] initWithImage:[UIImage imageNamed:@"nav-title.png"]];
+	UIImageView *title = [[UIImageView alloc] initWithImage:[UIImage imageNamed:@"nav-title"]];
+    title.accessibilityLabel = @"Cheddar";
 	title.frame = CGRectMake(0.0f, 0.0f, 116.0f, 21.0f);	
 	self.navigationItem.titleView = title;
 	self.navigationItem.backBarButtonItem = [[UIBarButtonItem alloc] initWithTitle:@"Lists" style:UIBarButtonItemStyleBordered target:nil action:nil];
-	self.navigationItem.rightBarButtonItem = [[UIBarButtonItem alloc] initWithImage:[UIImage imageNamed:@"plus.png"] style:UIBarButtonItemStyleBordered target:self action:@selector(createList:)];
+	self.navigationItem.rightBarButtonItem = [[UIBarButtonItem alloc] initWithImage:[UIImage imageNamed:@"plus"] style:UIBarButtonItemStyleBordered target:self action:@selector(createList:)];
 
 	[self setEditing:NO animated:NO];
 
-	self.noContentView = [[CDINoListsView alloc] initWithFrame:CGRectZero];
+	self.noContentView = [[CDIListsPlaceholderView alloc] initWithFrame:CGRectZero];
 
 	if (UI_USER_INTERFACE_IDIOM() == UIUserInterfaceIdiomPad) {
 		[[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(_listUpdated:) name:kCDKListDidUpdateNotificationName object:nil];
 	}
-
+	
 	_checkForOneList = YES;
 	[[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(_currentUserDidChange:) name:kCDKCurrentUserChangedNotificationName object:nil];
 	
@@ -114,7 +116,7 @@ NSString *const kCDISelectedListKey = @"CDISelectedListKey";
 		self.navigationItem.rightBarButtonItem = [[UIBarButtonItem alloc] initWithTitle:@"Settings" style:UIBarButtonItemStyleBordered target:self action:@selector(showSettings:)];
 	} else {
 		self.navigationItem.leftBarButtonItem = [[UIBarButtonItem alloc] initWithTitle:@"Edit" style:UIBarButtonItemStyleBordered target:self action:@selector(toggleEditMode:)];
-		self.navigationItem.rightBarButtonItem = [[UIBarButtonItem alloc] initWithImage:[UIImage imageNamed:@"plus.png"] style:UIBarButtonItemStyleBordered target:self action:@selector(createList:)];
+		self.navigationItem.rightBarButtonItem = [[UIBarButtonItem alloc] initWithImage:[UIImage imageNamed:@"plus"] style:UIBarButtonItemStyleBordered target:self action:@selector(createList:)];
 	}
 
 	if (!editing && UI_USER_INTERFACE_IDIOM() == UIUserInterfaceIdiomPad) {
@@ -224,6 +226,7 @@ NSString *const kCDISelectedListKey = @"CDISelectedListKey";
 	CDISettingsViewController *viewController = [[CDISettingsViewController alloc] init];
 	UINavigationController *navigationController = [[UINavigationController alloc] initWithRootViewController:viewController];
 	navigationController.modalPresentationStyle = UIModalPresentationFormSheet;
+    [self toggleEditMode:self];
 	[self.navigationController presentModalViewController:navigationController animated:YES];
 }
 
@@ -284,7 +287,7 @@ NSString *const kCDISelectedListKey = @"CDISelectedListKey";
 		return;
 	}
 
-	SSHUDView *hud = [[SSHUDView alloc] initWithTitle:@"Creating..." loading:YES];
+	CDIHUDView *hud = [[CDIHUDView alloc] initWithTitle:@"Creating..." loading:YES];
 	[hud show];
 	
 	CDKList *list = [[CDKList alloc] init];
@@ -330,7 +333,7 @@ NSString *const kCDISelectedListKey = @"CDISelectedListKey";
 	}
 
 	[self.tableView deleteRowsAtIndexPaths:[NSArray arrayWithObject:[NSIndexPath indexPathForRow:0 inSection:0]] withRowAnimation:UITableViewRowAnimationTop];
-	self.navigationItem.rightBarButtonItem = [[UIBarButtonItem alloc] initWithImage:[UIImage imageNamed:@"plus.png"] style:UIBarButtonItemStyleBordered target:self action:@selector(createList:)];
+	self.navigationItem.rightBarButtonItem = [[UIBarButtonItem alloc] initWithImage:[UIImage imageNamed:@"plus"] style:UIBarButtonItemStyleBordered target:self action:@selector(createList:)];
 	[self setEditing:NO animated:NO];
 	[self hideCoverView];
 	[self updatePlaceholderViews:YES];
@@ -355,7 +358,7 @@ NSString *const kCDISelectedListKey = @"CDISelectedListKey";
 		[CDISplitViewController sharedSplitViewController].listViewController.managedObject = list;
 		_selectedList = list;
 	} else {		
-		CDIListViewController *viewController = [[CDIListViewController alloc] init];
+		CDITasksViewController *viewController = [[CDITasksViewController alloc] init];
 		viewController.managedObject = list;
 		viewController.focusKeyboard = newList;
 		[self.navigationController pushViewController:viewController animated:YES];
@@ -429,6 +432,14 @@ NSString *const kCDISelectedListKey = @"CDISelectedListKey";
 	return cell;
 }
 
+- (BOOL)tableView:(UITableView *)tableView canEditRowAtIndexPath:(NSIndexPath *)indexPath {
+    if (_adding && indexPath.row == 0) {
+        return NO;
+    }
+    
+    return YES;
+}
+
 
 #pragma mark - UITableViewDelegate
 
@@ -473,7 +484,7 @@ NSString *const kCDISelectedListKey = @"CDISelectedListKey";
 	CDKList *list = [self objectForViewIndexPath:indexPath];
 	
 	if (UI_USER_INTERFACE_IDIOM() == UIUserInterfaceIdiomPad) {
-		CDIListViewController *listViewController = [CDISplitViewController sharedSplitViewController].listViewController;
+		CDITasksViewController *listViewController = [CDISplitViewController sharedSplitViewController].listViewController;
 		if ([listViewController.managedObject isEqual:list]) {
 			listViewController.managedObject = nil;
 		}
@@ -530,21 +541,23 @@ NSString *const kCDISelectedListKey = @"CDISelectedListKey";
 	[super controllerDidChangeContent:controller];
 	
 	if (_checkForOneList) {
-		NSNumber *selectedList = [[NSUserDefaults standardUserDefaults] objectForKey:kCDISelectedListKey];
-		if (selectedList) {
-			CDKList *list = [CDKList objectWithRemoteID:selectedList];
-			NSIndexPath *fIndexPath = [self.fetchedResultsController indexPathForObject:list];
-			if (!fIndexPath) {
-				_checkForOneList = NO;
-				return;
+		if ([self.navigationController topViewController] == self) {
+			NSNumber *selectedList = [[NSUserDefaults standardUserDefaults] objectForKey:kCDISelectedListKey];
+			if (selectedList) {
+				CDKList *list = [CDKList objectWithRemoteID:selectedList];
+				NSIndexPath *fIndexPath = [self.fetchedResultsController indexPathForObject:list];
+				if (!fIndexPath) {
+					_checkForOneList = NO;
+					return;
+				}
+				
+				NSIndexPath *selectedIndexPath = [self viewIndexPathForFetchedIndexPath:fIndexPath];
+				[self _selectListAtIndexPath:selectedIndexPath newList:NO];
 			}
-			
-			NSIndexPath *selectedIndexPath = [self viewIndexPathForFetchedIndexPath:fIndexPath];
-			[self _selectListAtIndexPath:selectedIndexPath newList:NO];
-		}
-		
-		if (self.fetchedResultsController.fetchedObjects.count == 1) {
-			[self _selectListAtIndexPath:[NSIndexPath indexPathForRow:0 inSection:0] newList:NO];
+
+			if (self.fetchedResultsController.fetchedObjects.count == 1) {
+				[self _selectListAtIndexPath:[NSIndexPath indexPathForRow:0 inSection:0] newList:NO];
+			}
 		}
 		_checkForOneList = NO;
 	}
